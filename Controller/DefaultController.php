@@ -14,18 +14,18 @@ namespace Novosga\AttendanceBundle\Controller;
 use App\Service\SecurityService;
 use DateTime;
 use Exception;
-use Novosga\Entity\Atendimento;
-use Novosga\Entity\Local;
-use Novosga\Entity\Servico;
-use Novosga\Entity\ServicoUnidade;
-use Novosga\Entity\ServicoUsuario;
-use Novosga\Entity\Usuario;
+use Novosga\Entity\AtendimentoInterface;
+use Novosga\Entity\LocalInterface;
+use Novosga\Entity\ServicoInterface;
+use Novosga\Entity\ServicoUnidadeInterface;
+use Novosga\Entity\ServicoUsuarioInterface;
+use Novosga\Entity\UsuarioInterface;
 use Novosga\Http\Envelope;
-use Novosga\Service\AtendimentoService;
+use App\Service\AtendimentoService;
 use Novosga\Event\EventDispatcherInterface;
-use Novosga\Service\FilaService;
-use Novosga\Service\ServicoService;
-use Novosga\Service\UsuarioService;
+use App\Service\FilaService;
+use App\Service\ServicoService;
+use App\Service\UsuarioService;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -221,11 +221,26 @@ class DefaultController extends AbstractController
         
         $servicos     = $usuarioService->servicos($usuario, $unidade);
         $atendimentos = $filaService->filaAtendimento($unidade, $usuario, $servicos, $tipo);
+        $total        = count($atendimentos);
+
+        $filas   = [];
+        $filas[] = [
+            'atendimentos' => $atendimentos,
+        ];
+
+        foreach ($servicos as $servico) {
+            $atendimentos = $filaService->filaAtendimento($unidade, $usuario, [ $servico ], $tipo);
+            $filas[] = [
+                'servico'      => $servico,
+                'atendimentos' => $atendimentos,
+            ];
+        }
         
         // fila de atendimento do atendente atual
         $data = [
-            'atendimentos' => $atendimentos,
-            'usuario'      => [
+            'total'    => $total,
+            'filas'    => $filas,
+            'usuario'  => [
                 'local'           => $local,
                 'numeroLocal'     => $numeroLocal,
                 'tipoAtendimento' => $tipo,
@@ -550,7 +565,7 @@ class DefaultController extends AbstractController
      *
      * @Route("/usuarios/{id}", name="novosga_attendance_usuarios", methods={"GET"})
      */
-    public function usuarios(Request $request, TranslatorInterface $translator, Servico $servico)
+    public function usuarios(Request $request, TranslatorInterface $translator, ServicoInterface $servico)
     {
         $envelope       = new Envelope();
         $usuario        = $this->getUser();
@@ -598,7 +613,7 @@ class DefaultController extends AbstractController
         // atualizando atendimento
         $query = $em->createQuery("
             UPDATE
-                Novosga\Entity\Atendimento e
+                Novosga\Entity\AtendimentoInterface e
             SET
                 e.status = :novoStatus $cond
             WHERE
