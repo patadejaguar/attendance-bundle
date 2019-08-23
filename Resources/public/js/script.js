@@ -13,8 +13,6 @@ var App = App || {};
         el: '#attendance',
         data: {
             busy: false,
-            filas: [],
-            total: 0,
             tiposAtendimento: tiposAtendimento,
             servicosRealizados: [],
             servicosUsuario: JSON.parse(JSON.stringify(servicosUsuario)),
@@ -94,14 +92,13 @@ var App = App || {};
                     url: App.url('/novosga.attendance/ajax_update'),
                     success: function (response) {
                         response.data = response.data || {};
-                        var estavaVazio = self.total === 0;
-                        self.filas = response.data.filas || [];
+                        var estavaVazio = self.atendimentos.length === 0;
+                        self.atendimentos = response.data.atendimentos || [];
                         self.usuario = response.data.usuario || {};
-                        self.total = response.data.total;
                         
                         // habilitando botao chamar
-                        if (self.total > 0) {
-                            document.title = "(" + self.total + ") " + defaultTitle;
+                        if (self.atendimentos.length > 0) {
+                            document.title = "(" + self.atendimentos.length + ") " + defaultTitle;
                             if (estavaVazio) {
                                 var audio = document.getElementById("alert");
                                 if (audio) {
@@ -140,8 +137,7 @@ var App = App || {};
                         self.novoLocal.local           = response.data.local.id;
                         self.novoLocal.numeroLocal     = response.data.numero;
                         self.novoLocal.tipoAtendimento = response.data.tipo;
-                        self.filas                     = [];
-                        self.total                     = 0;
+                        self.atendimentos              = [];
                         self.update();
                         $('#dialog-local').modal('hide');
                     }
@@ -174,29 +170,6 @@ var App = App || {};
                         }
                     });
                 }
-            },
-            
-            chamarServico: function (servico) {
-                var self = this;
-                self.busy = true;
-
-                App.ajax({
-                    url: App.url('/novosga.attendance/chamar/servico/' + servico.id),
-                    type: 'post',
-                    success: function (response) {
-                        self.atendimento = response.data;
-                        App.Websocket.emit('call ticket', {
-                            unity: unidade.id,
-                            service: self.atendimento.servico.id,
-                            hash: self.atendimento.hash
-                        });
-                    },
-                    complete: function () {
-                        setTimeout(function () {
-                            self.busy = false;
-                        }, 3 * 1000);
-                    }
-                });
             },
             
             iniciar: function () {

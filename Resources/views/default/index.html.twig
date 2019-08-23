@@ -14,11 +14,6 @@
                         <span class="numero" v-text="usuario.numeroLocal">
                             {{ numeroLocal }}
                         </span>
-                        <span class="tipo-atendimento" v-bind:class="'tipo-' + usuario.tipoAtendimento">
-                            {% verbatim %}
-                                {{ tiposAtendimento[usuario.tipoAtendimento] }}
-                            {% endverbatim %}
-                        </span>
                     </a>
                     <div class="text-center p-3">
                         <i class="fa fa-user"></i>
@@ -141,39 +136,40 @@
                                         <div class="card-header">
                                             {{ 'label.services.available'|trans }}
                                         </div>
-                                        <div class="card-body" v-if="servicosUsuario.length===0">
-                                            <p class="text-muted">
+                                        <div class="card-body">
+                                            <p class="text-muted" v-if="servicosUsuario.length===0">
                                                 {{ 'label.services.available.empty'|trans }}
                                             </p>
+
+                                            <ul class="list-group">
+                                                <li class="list-group-item"
+                                                    v-for="su in servicosUsuario"
+                                                    v-if="servicosRealizados.indexOf(su.servico)===-1">
+                                                    <span v-if="su.subServicos.length">
+                                                        {%- verbatim -%}
+                                                            {{ su.servico.nome }}
+                                                        {%- endverbatim -%}
+                                                    </span>
+                                                    <ul v-if="su.subServicos.length">
+                                                        <li v-for="sub in su.subServicos" v-if="sub.disabled!==true">
+                                                            <a href="#" title="{{ 'button.add'|trans }}"
+                                                               v-on:click.prevent="addServicoRealizado(sub)">
+                                                                {%- verbatim -%}
+                                                                    {{ sub.nome }}
+                                                                {%- endverbatim -%}
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                    <a href="#" title="{{ 'button.add'|trans }}"
+                                                       v-if="su.subServicos.length===0"
+                                                       v-on:click.prevent="addServicoRealizado(su.servico)">
+                                                        {%- verbatim -%}
+                                                            {{ su.servico.nome }}
+                                                        {%- endverbatim -%}
+                                                    </a>
+                                                </li>
+                                            </ul>
                                         </div>
-                                        <ul class="list-group list-group-flush">
-                                            <li class="list-group-item"
-                                                v-for="su in servicosUsuario"
-                                                v-if="servicosRealizados.indexOf(su.servico)===-1">
-                                                <span v-if="su.subServicos.length">
-                                                    {%- verbatim -%}
-                                                        {{ su.servico.nome }}
-                                                    {%- endverbatim -%}
-                                                </span>
-                                                <ul v-if="su.subServicos.length">
-                                                    <li v-for="sub in su.subServicos" v-if="sub.disabled!==true">
-                                                        <a href="#" title="{{ 'button.add'|trans }}"
-                                                            v-on:click.prevent="addServicoRealizado(sub)">
-                                                            {%- verbatim -%}
-                                                                {{ sub.nome }}
-                                                            {%- endverbatim -%}
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                                <a href="#" title="{{ 'button.add'|trans }}"
-                                                    v-if="su.subServicos.length===0"
-                                                    v-on:click.prevent="addServicoRealizado(su.servico)">
-                                                    {%- verbatim -%}
-                                                        {{ su.servico.nome }}
-                                                    {%- endverbatim -%}
-                                                </a>
-                                            </li>
-                                        </ul>
                                     </div>
                                 </div>
                                 <div class="col-6">
@@ -181,23 +177,24 @@
                                         <div class="card-header">
                                             {{ 'label.services.executed'|trans }}
                                         </div>
-                                        <div class="card-body" v-if="servicosRealizados.length===0">
-                                            <p class="text-muted">
+                                        <div class="card-body">
+                                            <p class="text-muted" v-if="servicosRealizados.length===0">
                                                 {{ 'label.services.executed.empty'|trans }}
                                             </p>
+
+                                            <ul class="list-group">
+                                                <li class="list-group-item"
+                                                    v-for="servico in servicosRealizados">
+                                                    <a href="#"
+                                                       title="{{ 'label.remove'|trans }}"
+                                                       v-on:click.prevent="removeServicoRealizado(servico)">
+                                                        {% verbatim %}
+                                                            {{ servico.nome }}
+                                                        {% endverbatim %}
+                                                    </a>
+                                                </li>
+                                            </ul>
                                         </div>
-                                        <ul class="list-group">
-                                            <li class="list-group-item"
-                                                v-for="servico in servicosRealizados">
-                                                <a href="#"
-                                                    title="{{ 'label.remove'|trans }}"
-                                                    v-on:click.prevent="removeServicoRealizado(servico)">
-                                                    {% verbatim %}
-                                                        {{ servico.nome }}
-                                                    {% endverbatim %}
-                                                </a>
-                                            </li>
-                                        </ul>
                                     </div>
                                 </div>
                             </div>
@@ -235,7 +232,7 @@
                             <button type="button"
                                     class="btn btn-primary btn-block"
                                     title="{{ 'button.call_next'|trans }}"
-                                    v-bind:disabled="busy || total===0"
+                                    v-bind:disabled="busy || atendimentos.length===0"
                                     v-on:click="chamar">
                                 <i class="fa fa-bullhorn"></i>
                                 <span>{{ 'button.call_next'|trans }}</span>
@@ -332,36 +329,16 @@
                     </div>
                 </div>
             </div>
-            <div v-bind:class="{'fila card mb-3':true, 'border-dark': !fila.servico}" v-for="fila in filas" v-if="!fila.servico || fila.atendimentos.length>0">
+            <div id="fila" class="card">
                 <h5 class="card-header">
-                    <span v-if="!fila.servico">Todos serviços</span>
-                    <span v-if="fila.servico">
-                        {% verbatim %}
-                            {{fila.servico.servico.nome}}
-                        {% endverbatim %}
-                    </span>
+                    {{ 'label.my_queue'|trans }}  (<span v-bind:class="'tipo-' + usuario.tipoAtendimento">{% verbatim %}{{ tiposAtendimento[usuario.tipoAtendimento] }}{% endverbatim %}</span>)
                 </h5>
                 <div class="card-body">
                     <ul>
                         <li>
-                            <button class="btn btn-outline-primary"
-                                title="{{ 'button.call_next'|trans }}"
-                                v-bind:disabled="busy || fila.atendimentos.length===0"
-                                v-on:click="chamar"
-                                v-if="!fila.servico">
-                                <i class="fa fa-bullhorn"></i>
-                                Chamar
-                            </button>
-                            <button class="btn btn-outline-primary"
-                                title="{{ 'button.call_next'|trans }}"
-                                v-bind:disabled="busy || fila.atendimentos.length===0"
-                                v-on:click="chamarServico(fila.servico.servico)"
-                                v-if="fila.servico">
-                                <i class="fa fa-bullhorn"></i>
-                                Chamar
-                            </button>
+                            <i class="fa fa-users"></i>
                         </li>
-                        <li v-for="(atendimento, index) in fila.atendimentos">
+                        <li v-for="(atendimento, index) in atendimentos">
                             <a href="#"
                                v-bind:class="{ prioridade: atendimento.prioridade.peso, proximo: index===0 }"
                                v-on:click.prevent="infoSenha(atendimento)"
@@ -371,7 +348,7 @@
                                 {%- endverbatim -%}
                             </a>
                         </li>
-                        <li class="empty" v-if="fila.atendimentos.length===0">
+                        <li class="empty" v-if="atendimentos.length===0">
                             {{ 'label.my_queue.empty'|trans }}
                         </li>
                     </ul>
@@ -640,14 +617,6 @@
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
-                    <div class="modal-footer" v-if="atendimentoInfo">
-                        <button type="button" class="btn btn-primary"
-                                v-bind:disabled="busy"
-                                v-on:click="chamarServico(atendimentoInfo.servico)"
-                                v-if="atendimentoInfo.status === 'emitida'">
-                            Chamar
-                        </button>
                     </div>
                 </div>
             </div>

@@ -14,18 +14,18 @@ namespace Novosga\AttendanceBundle\Controller;
 use App\Service\SecurityService;
 use DateTime;
 use Exception;
-use Novosga\Entity\AtendimentoInterface;
-use Novosga\Entity\LocalInterface;
-use Novosga\Entity\ServicoInterface;
-use Novosga\Entity\ServicoUnidadeInterface;
-use Novosga\Entity\ServicoUsuarioInterface;
-use Novosga\Entity\UsuarioInterface;
+use Novosga\Entity\Atendimento;
+use Novosga\Entity\Local;
+use Novosga\Entity\Servico;
+use Novosga\Entity\ServicoUnidade;
+use Novosga\Entity\ServicoUsuario;
+use Novosga\Entity\Usuario;
 use Novosga\Http\Envelope;
-use App\Service\AtendimentoService;
+use Novosga\Service\AtendimentoService;
 use Novosga\Event\EventDispatcherInterface;
-use App\Service\FilaService;
-use App\Service\ServicoService;
-use App\Service\UsuarioService;
+use Novosga\Service\FilaService;
+use Novosga\Service\ServicoService;
+use Novosga\Service\UsuarioService;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -221,26 +221,11 @@ class DefaultController extends AbstractController
         
         $servicos     = $usuarioService->servicos($usuario, $unidade);
         $atendimentos = $filaService->filaAtendimento($unidade, $usuario, $servicos, $tipo);
-        $total        = count($atendimentos);
-
-        $filas   = [];
-        $filas[] = [
-            'atendimentos' => $atendimentos,
-        ];
-
-        foreach ($servicos as $servico) {
-            $atendimentos = $filaService->filaAtendimento($unidade, $usuario, [ $servico ], $tipo);
-            $filas[] = [
-                'servico'      => $servico,
-                'atendimentos' => $atendimentos,
-            ];
-        }
         
         // fila de atendimento do atendente atual
         $data = [
-            'total'    => $total,
-            'filas'    => $filas,
-            'usuario'  => [
+            'atendimentos' => $atendimentos,
+            'usuario'      => [
                 'local'           => $local,
                 'numeroLocal'     => $numeroLocal,
                 'tipoAtendimento' => $tipo,
@@ -285,89 +270,6 @@ class DefaultController extends AbstractController
             $localId     = $this->getLocalAtendimento($usuarioService, $usuario);
             $numeroLocal = $this->getNumeroLocalAtendimento($usuarioService, $usuario);
             $servicos    = $usuarioService->servicos($usuario, $unidade);
-
-            $local = $this
-                ->getDoctrine()
-                ->getRepository(Local::class)
-                ->find($localId);
-
-            do {
-                $tipo         = $this->getTipoAtendimento($usuarioService, $usuario);
-                $atendimentos = $filaService->filaAtendimento($unidade, $usuario, $servicos, $tipo, 1);
-                if (count($atendimentos)) {
-                    $proximo = $atendimentos[0];
-                    $success = $atendimentoService->chamar($proximo, $usuario, $local, $numeroLocal);
-                    if (!$success) {
-                        usleep(100);
-                    }
-                    --$attempts;
-                } else {
-                    // nao existe proximo
-                    break;
-                }
-            } while (!$success && $attempts > 0);
-        }
-        
-        // response
-        if (!$success) {
-            if (!$proximo) {
-                throw new Exception(
-                    $translator->trans('error.queue.empty', [], self::DOMAIN)
-                );
-            } else {
-                throw new Exception(
-                    $translator->trans('error.attendance.in_process', [], self::DOMAIN)
-                );
-            }
-        }
-
-        $atendimentoService->chamarSenha($unidade, $proximo);
-
-        $data = $proximo->jsonSerialize();
-        $envelope->setData($data);
-
-        return $this->json($envelope);
-    }
-
-    /**
-     * Chama ou rechama o próximo da fila.
-     *
-     * @param Novosga\Request $request
-     *
-     * @Route("/chamar/servico/{id}", name="novosga_attendance_chamar_servico", methods={"POST"})
-     */
-    public function chamarServico(
-        Request $request,
-        AtendimentoService $atendimentoService,
-        FilaService $filaService,
-        UsuarioService $usuarioService,
-        TranslatorInterface $translator,
-        ServicoInterface $servico
-    ) {
-        $envelope = new Envelope();
-        
-        $attempts = 5;
-        $proximo = null;
-        $success = false;
-        $usuario = $this->getUser();
-        $unidade = $usuario->getLotacao()->getUnidade();
-        
-        // verifica se ja esta atendendo alguem
-        $atual = $atendimentoService->atendimentoAndamento($usuario->getId(), $unidade);
-
-        // se ja existe um atendimento em andamento (chamando senha novamente)
-        if ($atual) {
-            $success = true;
-            $proximo = $atual;
-        } else {
-            $localId        = $this->getLocalAtendimento($usuarioService, $usuario);
-            $numeroLocal    = $this->getNumeroLocalAtendimento($usuarioService, $usuario);
-            $servicoUsuario = $usuarioService->servico($usuario, $servico, $unidade);
-            $servicos       = [ $servicoUsuario ];
-
-            if (!$servicoUsuario) {
-                throw new \Exception('Serviço não disponível para o atendente atual');
-            }
 
             $local = $this
                 ->getDoctrine()
@@ -648,7 +550,7 @@ class DefaultController extends AbstractController
      *
      * @Route("/usuarios/{id}", name="novosga_attendance_usuarios", methods={"GET"})
      */
-    public function usuarios(Request $request, TranslatorInterface $translator, ServicoInterface $servico)
+    public function usuarios(Request $request, TranslatorInterface $translator, Servico $servico)
     {
         $envelope       = new Envelope();
         $usuario        = $this->getUser();
@@ -696,7 +598,7 @@ class DefaultController extends AbstractController
         // atualizando atendimento
         $query = $em->createQuery("
             UPDATE
-                Novosga\Entity\AtendimentoInterface e
+                Novosga\Entity\Atendimento e
             SET
                 e.status = :novoStatus $cond
             WHERE
